@@ -4,3 +4,8 @@ ratings_test.txt
 ratings_train.txt
 
 fraudDataset/
+
+*.wav
+*.mp3
+*.m4a
+*.flac
