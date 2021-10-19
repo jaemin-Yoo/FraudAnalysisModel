@@ -1,4 +1,4 @@
-# Project: LSTM_module
+# Project: FraudAnalysisModel
 
 LSTM을 활용한 보이스피싱 탐지 모듈 개발
 
