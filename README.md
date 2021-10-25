@@ -1,9 +1,10 @@
-# Project: FraudAnalysisModel
+# Project: LSTM_module
 
 LSTM을 활용한 보이스피싱 탐지 모듈 개발
 
 ## 순서
 1. import: 필요한 모듈 import
+2. 데이터 셋 불러오기(load)
 2. 전처리: 학습에 필요한 데이터 전처리 수행
 3. 모델링(model): 모델 정의
 4. 컴파일(compile): 모델 생성
@@ -15,6 +16,7 @@ import os
 
 import json
 import pickle
+import re
 
 import pandas as pd
 import numpy as np
@@ -45,80 +47,162 @@ file_name = "LSTM_module_ver4.0"
 빈 list 생성
 ```python
 spam_X = []
+spam_temp = []
 ham_X = []
+ham_temp = []
 ```
-피싱 데이터 가져오기
+* `ham_count`: 일반 데이터 개수 제한
+* `min_data`: 텍스트 데이터 최소 길이
+* `data_length`: 텍스트 데이터 일반 길이
 ```python
-path = '../../fraudDataset/spamData/'
+ham_count = 10000
+min_data = 10
+data_length = 100
+```
+보이스피싱 통화 데이터 가져오기
+```python
+path = 'fraudDataset/spamData/'
 path1 = os.listdir(path)
 for a in path1:
     path2 = path+a
     with open(path2, 'r', encoding='utf-8') as f:
         contents = f.read()
-        spam_X.append(contents)
+        contents = re.sub("사회자 :|피해자 :|\((.+?)\)|네|[^가-힣 ]", "", contents) # 특수문자 제거
+        spam_temp.append(contents)
+```
+일반 통화 데이터 가져오기
+```python
+contents = ""
+path = 'fraudDataset/hamData_counselor/'
+path1 = os.listdir(path)
+for a in path1:
+    
+    if len(ham_temp) > ham_count:
+        break
+    
+    path2 = os.listdir(path+a)
+    for b in path2:
+        
+        if len(ham_temp) > ham_count:
+            break
+        
+        path3 = os.listdir(path+a+'/'+b)
+        for c in path3:
+            
+            if len(ham_temp) > ham_count:
+                break
+                    
+            path4 = os.listdir(path+a+'/'+b+'/'+c)
+            for d in path4:
+                
+                if len(ham_temp) > ham_count:
+                    break
+                
+                path5 = os.listdir(path+a+'/'+b+'/'+c+'/'+d)
+                for e in path5:
+                    
+                    if len(ham_temp) > ham_count:
+                        break
+                    
+                    path6 = os.listdir(path+a+'/'+b+'/'+c+'/'+d+'/'+e)
+
+                    if len(contents) > min_data:
+                        ham_temp.append(contents)
+
+                    contents = ""
+                    for f in path6:
+                        
+                        if len(ham_temp) > ham_count:
+                            break
+                        
+                        if f.split(".")[1] == "txt":
+                            path7 = path+a+'/'+b+'/'+c+'/'+d+'/'+e+'/'+f
+                        else:
+                            continue
+                        with open(path7, "r", encoding="UTF-8") as f:
+                            text = f.read()
+                            text = re.sub("#@(.+?)#|네|[^가-힣 ]", "", text) # 특수문자 제거
+
+                        contents += text+" "
+                        if len(contents) > data_length:
+                            ham_temp.append(contents)
+                            contents = ""
+                            
+ham_X = ham_temp
 ```
 피싱 데이터 1개 출력
 ```python
-spam_X[0]
-```
-일반 데이터 가져오기
-
-* `ham_cnt`: 일반 데이터 개수제한
-```python
-ham_cnt = 10000 # ham Data Count
-```
-```python
-path = '../../fraudDataset/hamData/'
-path1 = os.listdir(path)
-for a in path1:
-    path2 = os.listdir(path+a)
-    for b in path2:
-        path3 = path+a+'/'+b
-        with open(path3, 'r', encoding='utf-8') as f:
-            contents = f.read()
-            json_data = json.loads(contents)
-            data = ''
-            data = json_data['data']
-            for i in range(len(data)):                
-                sentence = ''
-                dialogue = data[i]['body']['dialogue']
-                for j in range(len(dialogue)):
-                    utterance = dialogue[j]['utterance']
-                    sentence += utterance+' '
-                    
-                if len(ham_X) == ham_cnt:
-                    break
-                    
-                ham_X.append(sentence)
+spam_temp[0]
 ```
 일반 데이터 5개 출력
 ```python
-ham_X[:5]
+ham_temp[:5]
+```
+## 텍스트 데이터 분리
+
+**findIndex**: 문장이 끝나는 부분의 index값을 찾기위한 함수
+```python
+def findIndex(data_list, split_list, start_index):
+    index_list = []
+    for i in split_list:
+        index = data_list.find(i, start_index)
+        index_list.append(index)
+        
+    index_list = [i for i in index_list if i not in [-1]]
+    if index_list == []:
+        return -1
+    
+    index = min(index_list)
+    
+    return index     
+```
+* `split_list`: 문장 단위로 분리하기 위한 글자 리스트
+```python
+split_list = ['다 ','요 ','죠 ', '까 ']
+```
+`data_length` 값 이후에 `split_list` 에 있는 문자가 나오면 자르기 (스팸 데이터)
+```python
+for t in spam_temp:
+    index = findIndex(t, split_list, data_length)
+        
+    i = 0
+    while index != -1:
+        x = t[i:index+2]
+        spam_X.append(x)
+        
+        i = index+2
+        index = findIndex(t, split_list, i+data_length)
+    else:
+        x = t[i:]
+        if len(x) > min_data:
+            spam_X.append(x) # 텍스트 마지막 부분 추가
 ```
 ## 전처리: 데이터 길이 제한
 
-* `min_data`: 길이 min 사이즈를 지정함, min 미만의 데이터 삭제
-```python
-min_data = 50
-```
 길이가 min 미만 데이터 삭제 후 중복 제거
 ```python
 spam_df = pd.DataFrame(spam_X, columns=['text'])
 spam_df.drop(spam_df[spam_df['text'].str.len() < min_data].index, inplace=True) # 길이가 min_data 미만인 데이터 삭제
-spam_df['text'].nunique() # 중복 확인
+spam_df.shape[0] - spam_df['text'].nunique() # 중복 개수
+```
+```python
+ham_df = pd.DataFrame(ham_X, columns=['text'])
+ham_df.drop(ham_df[ham_df['text'].str.len() < min_data].index, inplace=True) # 길이가 min_data 미만인 데이터 삭제
+ham_df.shape[0] - ham_df['text'].nunique() # 중복 개수
 ```
 ```python
 spam_df.drop_duplicates(subset=['text'], inplace=True) # 중복 제거
 spam_df['label'] = 1
 ```
 ```python
-ham_df = pd.DataFrame(ham_X, columns=['text'])
-ham_df.drop(ham_df[ham_df['text'].str.len() < min_data].index, inplace=True) # 길이가 min_data 미만인 데이터 삭제
-ham_df['text'].nunique() # 중복 확인
+spam_df
 ```
 ```python
 ham_df.drop_duplicates(subset=['text'], inplace=True) # 중복 제거
 ham_df['label'] = 0
+```
+```python
+ham_df
 ```
 데이터 정보 출력
 ```python
@@ -155,19 +239,28 @@ plt.subplot(121)
 train_data['label'].value_counts().plot(kind = 'bar', title='Count')
 print(train_data.groupby('label').size().reset_index(name = 'count'))
 ```
-## 전처리: 특수문자 및 초성제거
+## 전처리: 빈 데이터 처리
 
-한글과 공백을 제외하고 모두 제거
+빈 데이터 NA 처리
 ```python
 pd.set_option('mode.chained_assignment', None) # 경고 메시지 끄기
 
-train_data['text'] = train_data['text'].str.replace("#@(.+?)#|[^가-힣 ]","",regex=True)
 train_data.replace('', np.nan, inplace=True)
-
-test_data['text'] = test_data['text'].str.replace("#@(.+?)#|[^가-힣 ]","",regex=True)
+```
+```python
 test_data.replace('', np.nan, inplace=True)
 ```
 전처리 후 생긴 null 데이터 확인
+```python
+print(train_data.isnull().sum()) # null 데이터 확인
+print()
+print(test_data.isnull().sum())
+```
+null 값이 있는 행 제거 후 확인
+```python
+train_data = train_data.dropna(how='any', axis=0)
+test_data = test_data.dropna(how='any', axis=0)
+```
 ```python
 print(train_data.isnull().sum()) # null 데이터 확인
 print()
@@ -181,7 +274,7 @@ okt = Okt() # 한글은 형태소 분석기 사용해야됨 KoNPLY
 ```
 불용어 단어
 ```python
-stopwords = ['하다','이','가','에','는', '없다'] # spam, ham 빈도 수 높은 중복단어 제거
+stopwords = [] # spam, ham 빈도 수 높은 중복단어 제거
 ```
 어간 단위로 토큰화 및 불용어 처리
 ```python
@@ -233,7 +326,7 @@ tokenizer.fit_on_texts(X_train)
 ```
 최소 단어 빈도 수 제한
 ```python
-threshold = 2 # 등장 횟수가 threshold이하인 단어는 제거
+threshold = 2 # 등장 횟수가 threshold미만인 단어는 제거
 ```
 최적의 `vocab_size` 선정
 ```python
@@ -242,8 +335,9 @@ total_cnt = len(word_to_index) # 단어의 수
 rare_cnt = 0 # 등장 빈도수가 threshold보다 작은 단어의 개수를 카운트
 total_freq = 0 # 훈련 데이터의 전체 단어 빈도수 총 합
 rare_freq = 0 # 등장 빈도수가 threshold보다 작은 단어의 등장 빈도수의 총 합
-
+```
 # 단어와 빈도수의 쌍(pair)을 key와 value로 받는다.
+```python
 for key, value in tokenizer.word_counts.items():
     total_freq = total_freq + value
 
@@ -272,7 +366,10 @@ tokenizer.fit_on_texts(X_train)
 ```
 ```python
 for key, value in tokenizer.word_index.items():
-    print('{} \t======>\t {}'.format(key, value))
+    if len(key) < 4:
+        print('{}\t======>\t {}'.format(key, value))
+    else:
+        print('{}======>\t {}'.format(key, value))
     if value == 25:
         break
 ```
@@ -308,7 +405,7 @@ print('평균 길이 :',sum(map(len, X_train))/len(X_train))
 * `truncating`: 문장 길이가 `maxlen`보다 길 때, 앞을 자를지 뒤를 자를지 정의
 * `padding`: 문장 길이가 `maxlen`보다 짧을 때, 앞을 채울지 뒤를 채울지 정의
 ```python
-max_len = 1000 # 최대 길이 (그래프를 보고 판단)
+max_len = 150 # 최대 길이 (그래프를 보고 판단)
 trunc_type = 'post' # 잘라낼 문장의 위치
 padding_type = 'post'
 ```
@@ -335,19 +432,19 @@ X_train.shape
 
 임베딩 차원 정의
 ```python
-embedding_dim = 16
+embedding_dim = 100
 ```
 모델 구성
 ```python
 model = Sequential([
-    Embedding(vocab_size, embedding_dim, input_length = max_len),
-    LSTM(64),
+    Embedding(vocab_size, embedding_dim),
+    LSTM(128),
     Dense(1, activation='sigmoid')
 ])
 ```
 ## 컴파일
 
-1. `optimizer`은 가장 최적화가 잘되는 알고리즘 'adam' 사용
+~~1. `optimizer`은 가장 최적화가 잘되는 알고리즘 'adam' 사용~~  
 2. `loss`는 이진분류이므로, `binary_crossentropy` 사용
 ```python
 model.compile(optimizer='rmsprop', loss='binary_crossentropy', metrics=['acc'])
@@ -366,7 +463,7 @@ es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=4)
 ```
 ## 모델 학습
 ```python
-history = model.fit(X_train, y_train, epochs=15, callbacks=[es, mc], batch_size=256, validation_split=0.2)
+history = model.fit(X_train, y_train, epochs=15, callbacks=[es, mc], batch_size=64, validation_split=0.2)
 ```
 학습 완료 후 `load_model` 를 해주지 않으면 ModelCheckpoint를 만든 의미가 없음
 ```python
@@ -392,7 +489,7 @@ with open(file_name+"_tokenizer.pickle", "wb") as f:
 ```
 변수 저장
 ```python
-d = {'min_data':min_data, 'max_len':max_len, 'trunc_type':trunc_type, 'padding_type':padding_type}
+d = {'min_data':min_data, 'data_length':data_length, 'split_list':split_list,'max_len':max_len, 'trunc_type':trunc_type, 'padding_type':padding_type}
 json_var = json.dumps(d)
 with open(file_name+'_variable.json', 'w') as f:
     f.write(json_var)
@@ -402,4 +499,4 @@ with open(file_name+'_variable.json', 'w') as f:
 json_stopwords = json.dumps(stopwords)
 with open(file_name+'_stopwords.json', 'w') as f:
     f.write(json_stopwords)
-```    
+```
