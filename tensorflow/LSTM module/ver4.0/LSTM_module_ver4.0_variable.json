@@ -1,1 +1,1 @@
-{"min_data": 150, "data_length": 200, "split_list": ["\ub2e4 ", "\uc694 ", "\uc8e0 ", "\uae4c "], "max_len": 150, "trunc_type": "post", "padding_type": "post"}
+{"min_data": 10, "data_length": 100, "split_list": ["\ub2e4 ", "\uc694 ", "\uc8e0 ", "\uae4c "], "max_len": 150, "trunc_type": "post", "padding_type": "post"}
